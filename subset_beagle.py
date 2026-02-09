@@ -5,8 +5,6 @@ Quickly subset beagle files
 Usage:
     subset_beagle --input <file> --keep <samples> --out <output>
     subset_beagle --input <file> --remove <samples> --out <output>
-
-Author: Holden
 """
 
 import sys
@@ -18,7 +16,7 @@ import tempfile
 from typing import Set, List, Tuple
 
 def read_sample_list(sample_list_file: str) -> Set[str]:
-    """Read sample IDs from a text file (one per line, no header)"""
+    """Read sample IDs from a text file"""
     samples = set()
     
     try:
@@ -41,7 +39,7 @@ def read_sample_list(sample_list_file: str) -> Set[str]:
     return samples
 
 def read_header(input_file: str) -> str:
-    """Read the header line from a Beagle file (handles gzipped files)"""
+    """Read header line from Beagle file (handles gzipped files)"""
     try:
         if input_file.endswith('.gz'):
             with gzip.open(input_file, 'rt', encoding='utf-8') as f:
@@ -62,8 +60,8 @@ def find_columns_to_keep(header_line: str, sample_list: Set[str],
     Determine which columns to keep based on sample list
     
     Args:
-        header_line: Header line from Beagle file
-        sample_list: Set of sample IDs to keep or remove
+        header_line: Beagle Header
+        sample_list: sample IDs to keep or remove
         remove_mode: If True, remove samples in list; if False, keep only samples in list
     
     Returns:
@@ -71,10 +69,9 @@ def find_columns_to_keep(header_line: str, sample_list: Set[str],
     """
     fields = header_line.split('\t')
     
-    # always keep the first 3 columns (marker, allele1, allele2)
-    columns_to_keep = [1, 2, 3]  # AWK is 1-indexed!
+    # always keep marker, allele1, allele2)
+    columns_to_keep = [1, 2, 3]
     
-    # each sample has 3 columns in Beagle format
     all_samples = set()
     samples_kept = set()
     
@@ -83,12 +80,10 @@ def find_columns_to_keep(header_line: str, sample_list: Set[str],
             sample_id = fields[i]
             all_samples.add(sample_id)
             
-            # In remove mode: keep if NOT in list
-            # In keep mode: keep if IN list
             should_keep = (sample_id not in sample_list) if remove_mode else (sample_id in sample_list)
             
             if should_keep:
-                # Add all 3 columns for this sample (AWK is 1-indexed, so add 1)
+                # Add all 3 columns for this sample
                 columns_to_keep.extend([i+1, i+2, i+3])
                 samples_kept.add(sample_id)
     
@@ -115,15 +110,14 @@ def generate_awk_command(columns: List[int], input_file: str, output_file: str,
     Generate the AWK command for subsetting
     
     Args:
-        columns: List of column indices to keep (1-indexed for AWK)
-        input_file: Input Beagle file path
-        output_file: Output file path
+        columns: List of column indices to keep (1-indexed)
+        input_file: Input Beagle
+        output_file: Outfile path
         use_progress: If True and pv is available, show progress bar
     
     Returns:
         Command as list of strings for subprocess
     """
-    # build the AWK print statement
     # format: print $1, $2, $3, ... sep = "\t"
     column_refs = ','.join([f'${col}' for col in columns])
     awk_script = f'{{OFS="\\t"; print {column_refs}}}'
@@ -163,24 +157,24 @@ def generate_awk_command(columns: List[int], input_file: str, output_file: str,
 def subset_beagle(input_file: str, sample_list_file: str, output_file: str, 
                   remove_mode: bool = False):
     """
-    Main function to subset Beagle file using AWK
+    Main function
     
     Args:
-        input_file: Path to input Beagle file
-        sample_list_file: Path to sample list file
-        output_file: Path to output file
+        input_file: Path to input Beagle
+        sample_list_file: Path to sample list
+        output_file: Path to outfile
         remove_mode: If True, remove samples; if False, keep samples
     """
     print("=" * 70)
-    print("BEAGLE FILE SUBSETTING (Python + AWK Hybrid)")
+    print("SUBSETTING BEAGLE")
     print("=" * 70)
     
-    # is the input file present?
+    # infile present?
     if not os.path.exists(input_file):
         print(f"Error: Input file '{input_file}' not found.")
         sys.exit(1)
     
-    # add .beagle extension if needed
+    # add .beagle extension
     if not output_file.endswith('.beagle') and not output_file.endswith('.beagle.gz'):
         output_file = output_file + '.beagle'
     
@@ -195,13 +189,13 @@ def subset_beagle(input_file: str, sample_list_file: str, output_file: str,
     total_samples = (len(header_line.split('\t')) - 3) // 3
     print(f"      Total samples in file: {total_samples}")
     
-    # find columns to keep
+    # get cols to keep
     print(f"\n[3/4] Calculating columns to keep...")
     columns_to_keep, samples_kept, samples_removed = find_columns_to_keep(
         header_line, sample_list, remove_mode
     )
     
-    # report results
+    # show results
     mode_str = "REMOVE" if remove_mode else "KEEP"
     print(f"      Mode: {mode_str}")
     print(f"      Samples kept: {len(samples_kept)}")
@@ -220,7 +214,7 @@ def subset_beagle(input_file: str, sample_list_file: str, output_file: str,
     print(f"      Total columns to extract: {len(columns_to_keep)}")
     
     # generate and execute AWK command
-    print(f"\n[4/4] Processing file with AWK (streaming mode)...")
+    print(f"\n[4/4] Processing file...")
     print(f"      Input:  {input_file}")
     print(f"      Output: {output_file}")
     
@@ -230,11 +224,10 @@ def subset_beagle(input_file: str, sample_list_file: str, output_file: str,
         print(f"\n      Progress (% data processed, time elapsed, rate):")
     else:
         print(f"\n      Note: Install 'pv' for progress bar (conda install pv or apt install pv)")
-        print(f"      Processing... (this may take a few moments)")
+        print(f"      Processing...")
     
     try:
-        # execute the command
-        # use subprocess.Popen to allow real-time output from pv
+        # execute AWK command
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
@@ -244,19 +237,18 @@ def subset_beagle(input_file: str, sample_list_file: str, output_file: str,
             universal_newlines=True
         )
         
-        # stream output in real-time (for pv progress)
         if has_pv:
             for line in process.stdout:
                 print(f"      {line}", end='', flush=True)
         
-        # wait for completion
+        # wait to complete
         return_code = process.wait()
         
         if return_code != 0:
             print(f"\nError: AWK command failed with return code {return_code}")
             sys.exit(1)
         
-        # check if output file was created
+        # check if outfile was created
         if os.path.exists(output_file):
             output_size = os.path.getsize(output_file)
             print(f"\n{'=' * 70}")
@@ -278,27 +270,10 @@ def subset_beagle(input_file: str, sample_list_file: str, output_file: str,
         sys.exit(1)
 
 def main():
-    """Main function with argument parsing"""
+    """Main function and parse args"""
     parser = argparse.ArgumentParser(
-        description='Ultra-fast Beagle file subsetting using Python + AWK',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # keep only specified samples
-  subset_beagle --input data.beagle.gz --keep samples.txt --out subset.beagle.gz
-  
-  # remove specified samples (keep all others)
-  subset_beagle --input data.beagle --remove bad_samples.txt --out filtered.beagle
-  
-  # mix of compressed/uncompressed files
-  subset_beagle --input input.beagle.gz --keep keep.txt --out output.beagle
-
-Notes:
-  - Input and output can be .beagle or .beagle.gz
-  - Sample list should be one sample ID per line, w/o header
-  - Must specify either --keep OR --remove
-  - AWK streaming provides optimal performance for large files
-        """
+        description='Subset Beagle File',
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
     parser.add_argument('--input', '-i', required=True,
@@ -306,7 +281,7 @@ Notes:
     parser.add_argument('--out', '-o', required=True,
                        help='Output Beagle file (.beagle or .beagle.gz)')
     
-    # Mutually exclusive group for keep/remove
+    # mutually exclusive group for keep/remove
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--keep', '-k', metavar='FILE',
                       help='File with sample IDs to keep (one per line)')
@@ -315,7 +290,7 @@ Notes:
     
     args = parser.parse_args()
     
-    # determine mode and sample list file
+    # determine mode and sample list
     if args.keep:
         sample_list_file = args.keep
         remove_mode = False
