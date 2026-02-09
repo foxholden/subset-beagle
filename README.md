@@ -1,5 +1,5 @@
 # subset-beagle
-Fast subsetting of **ANGSD/Beagle** genotype likelihood (`.beagle` / `.beagle.gz`) files.  
+Fast subsetting of **Beagle** genotype likelihood (`.beagle` / `.beagle.gz`) files.  
 
 ## Usage
 
